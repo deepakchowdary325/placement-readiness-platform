@@ -30,17 +30,21 @@ export const Results = () => {
             setData(entry);
 
             // Initialize local states
-            // Start with base calculated score if readinessScore not present as current
-            setCurrentScore(entry.readinessScore || 0);
+            // Favor strictly finalScore, fallback to legacy readinessScore
+            const initialScore = entry.finalScore !== undefined ? entry.finalScore : (entry.readinessScore || 0);
+            setCurrentScore(initialScore);
 
             // Reconstruct confidence map: prioritize stored map, fallback to everything = "practice"
             const storedMap = entry.skillConfidenceMap || {};
             const initialMap = {};
 
+            // extractedSkills is now a strict object with arrays { coreCS: [...], languages: [...] }
             Object.values(entry.extractedSkills || {}).forEach(skillArray => {
-                skillArray.forEach(skill => {
-                    initialMap[skill] = storedMap[skill] || 'practice';
-                });
+                if (Array.isArray(skillArray)) {
+                    skillArray.forEach(skill => {
+                        initialMap[skill] = storedMap[skill] || 'practice';
+                    });
+                }
             });
 
             setSkillConfidence(initialMap);
@@ -57,7 +61,9 @@ export const Results = () => {
     const handleDownloadTxt = () => {
         if (!data) return;
 
-        const { company, role, checklist, plan, questions } = data;
+        const { company, role, checklist, plan7Days, questions } = data;
+        const planToUse = plan7Days || data.plan || []; // fallback for legacy
+
         let content = `Placement Readiness Analysis\n`;
         content += `============================\n`;
         content += `Role: ${role || "Unknown Role"}\n`;
@@ -78,7 +84,7 @@ export const Results = () => {
         content += `\n`;
 
         content += `7-DAY STUDY PLAN:\n`;
-        plan.forEach(p => {
+        planToUse.forEach(p => {
             content += `\n[${p.day}: ${p.title}]\n  ${p.desc}\n`;
         });
         content += `\n`;
@@ -109,10 +115,19 @@ export const Results = () => {
             [skill]: newStatus
         };
 
-        // Calculate new score differential
-        // +2 for moving practice->know, -2 for moving know->practice
-        let scoreDiff = newStatus === 'know' ? 2 : -2;
-        let newScore = Math.min(Math.max(currentScore + scoreDiff, 0), 100);
+        // Calculate new score differential precisely from the baseScore
+        // Instead of accumulating relative to currentScore, we recalculate fully for stability
+        const base = data.baseScore !== undefined ? data.baseScore : (data.readinessScore || 0);
+
+        let pointsEarned = 0;
+        let pointsLost = 0;
+
+        Object.values(newConfidenceMap).forEach(status => {
+            if (status === 'know') pointsEarned += 2;
+            if (status === 'practice') pointsLost += 2;
+        });
+
+        let newScore = Math.min(Math.max(base + pointsEarned - pointsLost, 0), 100);
 
         setSkillConfidence(newConfidenceMap);
         setCurrentScore(newScore);
@@ -121,7 +136,8 @@ export const Results = () => {
         if (data && data.id) {
             updateAnalysis(data.id, {
                 skillConfidenceMap: newConfidenceMap,
-                readinessScore: newScore
+                finalScore: newScore,
+                updatedAt: new Date().toISOString()
             });
         }
     };
@@ -130,7 +146,7 @@ export const Results = () => {
 
     const { company, role, extractedSkills, companyIntel } = data;
     const checklist = data.checklist || [];
-    const planItems = data.plan || [];
+    const planItems = data.plan7Days || data.plan || [];
     const savedQuestions = data.questions || [];
 
     // Derive top 3 weak skills for the "Action Next" box
@@ -195,42 +211,53 @@ export const Results = () => {
                         </CardHeader>
                         <CardContent>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                                {Object.entries(extractedSkills).map(([category, skills]) => (
-                                    <div key={category} className="space-y-3">
-                                        <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100 pb-1">{category}</h4>
-                                        <div className="flex flex-col gap-2">
-                                            {skills.map(skill => {
-                                                const isKnown = skillConfidence[skill] === 'know';
+                                {Object.entries(extractedSkills).map(([schemaKey, skills]) => {
+                                    if (!Array.isArray(skills) || skills.length === 0) return null;
 
-                                                return (
-                                                    <div
-                                                        key={skill}
-                                                        onClick={() => toggleSkillConfidence(skill)}
-                                                        className={cn(
-                                                            "group flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-all border",
-                                                            isKnown
-                                                                ? "bg-green-50 border-green-200 hover:bg-green-100"
-                                                                : "bg-orange-50 border-orange-200 hover:bg-orange-100"
-                                                        )}
-                                                    >
-                                                        <span className={cn(
-                                                            "text-sm font-medium",
-                                                            isKnown ? "text-green-800" : "text-orange-800"
-                                                        )}>
-                                                            {skill}
-                                                        </span>
-                                                        <span className={cn(
-                                                            "text-xs font-bold px-2 py-0.5 rounded-full",
-                                                            isKnown ? "bg-green-200 text-green-800" : "bg-orange-200 text-orange-800"
-                                                        )}>
-                                                            {isKnown ? "I know this" : "Need practice"}
-                                                        </span>
-                                                    </div>
-                                                );
-                                            })}
+                                    // Map strict schema keys back to readable titles
+                                    const categoryMap = {
+                                        coreCS: "Core CS", languages: "Languages", web: "Web",
+                                        data: "Data", cloud: "Cloud/DevOps", testing: "Testing", other: "Other Skills"
+                                    };
+                                    const displayTitle = categoryMap[schemaKey] || schemaKey;
+
+                                    return (
+                                        <div key={schemaKey} className="space-y-3">
+                                            <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100 pb-1">{displayTitle}</h4>
+                                            <div className="flex flex-col gap-2">
+                                                {skills.map(skill => {
+                                                    const isKnown = skillConfidence[skill] === 'know';
+
+                                                    return (
+                                                        <div
+                                                            key={skill}
+                                                            onClick={() => toggleSkillConfidence(skill)}
+                                                            className={cn(
+                                                                "group flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-all border",
+                                                                isKnown
+                                                                    ? "bg-green-50 border-green-200 hover:bg-green-100"
+                                                                    : "bg-orange-50 border-orange-200 hover:bg-orange-100"
+                                                            )}
+                                                        >
+                                                            <span className={cn(
+                                                                "text-sm font-medium",
+                                                                isKnown ? "text-green-800" : "text-orange-800"
+                                                            )}>
+                                                                {skill}
+                                                            </span>
+                                                            <span className={cn(
+                                                                "text-xs font-bold px-2 py-0.5 rounded-full",
+                                                                isKnown ? "bg-green-200 text-green-800" : "bg-orange-200 text-orange-800"
+                                                            )}>
+                                                                {isKnown ? "I know this" : "Need practice"}
+                                                            </span>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </CardContent>
                     </Card>

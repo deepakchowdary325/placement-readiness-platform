@@ -12,10 +12,18 @@ export const Assessments = () => {
     const [jdText, setJdText] = useState('');
     const [isAnalyzing, setIsAnalyzing] = useState(false);
 
+    const [errorMsg, setErrorMsg] = useState('');
+
     const handleAnalyze = (e) => {
         e.preventDefault();
+        setErrorMsg('');
 
         if (!jdText.trim()) return;
+        if (jdText.trim().length < 200) {
+            setErrorMsg("This JD is too short to analyze deeply. Paste full JD for better output.");
+            return;
+        }
+
         setIsAnalyzing(true);
 
         // Simulate a slight delay to feel like "AI working" (optional, but requested premium UX)
@@ -27,16 +35,20 @@ export const Assessments = () => {
             const plan = generatePlan(extractedSkills);
             const questions = generateQuestions(extractedSkills);
 
+            // Construct strictly standardized payload
             const payload = {
-                company: company.trim(),
-                role: role.trim(),
+                company: company.trim() || "",
+                role: role.trim() || "",
                 jdText: jdText.trim(),
-                extractedSkills,
-                checklist,
-                plan,
-                questions,
-                readinessScore,
-                companyIntel
+                extractedSkills: extractedSkills,
+                roundMapping: checklist, // Keep named roundMapping for clarity but it relies on checklist logic
+                checklist: checklist,
+                plan7Days: plan,
+                questions: questions,
+                baseScore: readinessScore,
+                skillConfidenceMap: {},
+                finalScore: readinessScore,
+                companyIntel: companyIntel
             };
 
             const savedEntry = saveAnalysis(payload);
@@ -107,6 +119,12 @@ export const Assessments = () => {
                                 className="w-full p-4 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent min-h-[250px] resize-y font-mono text-sm transition-all"
                             />
                         </div>
+
+                        {errorMsg && (
+                            <div className="p-3 bg-orange-50 border border-orange-200 text-orange-800 rounded-lg text-sm font-medium">
+                                {errorMsg}
+                            </div>
+                        )}
 
                         <button
                             type="submit"

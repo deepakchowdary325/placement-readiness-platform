@@ -6,10 +6,22 @@ import { Clock, Briefcase, Building, ChevronRight } from 'lucide-react';
 
 export const History = () => {
     const [history, setHistory] = useState([]);
+    const [hasCorruptedItems, setHasCorruptedItems] = useState(false);
     const navigate = useNavigate();
 
     useEffect(() => {
-        setHistory(getHistory());
+        const validHistory = getHistory();
+        setHistory(validHistory);
+
+        try {
+            const raw = localStorage.getItem('jd_history');
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed) && parsed.length > validHistory.length) {
+                    setHasCorruptedItems(true);
+                }
+            }
+        } catch (e) { }
     }, []);
 
     const formatDate = (isoString) => {
@@ -23,6 +35,12 @@ export const History = () => {
                 <h1 className="text-3xl font-bold tracking-tight text-slate-900">Analysis History</h1>
                 <p className="text-slate-500 mt-2">Relive or resume a past Job Description analysis tailored for your prep.</p>
             </div>
+
+            {hasCorruptedItems && (
+                <div className="bg-orange-50 border border-orange-200 text-orange-800 p-4 rounded-xl text-sm font-medium">
+                    One or more saved entries couldn't be loaded due to data corruption. Create a new analysis.
+                </div>
+            )}
 
             {history.length === 0 ? (
                 <div className="text-center py-20 bg-slate-50 rounded-xl border border-dashed border-slate-300">

@@ -28,24 +28,32 @@ const QUESTION_BANK = {
 };
 
 /**
- * Extracts skills from JD text and groups them by category
+ * Extracts skills from JD text and groups them by strict schema categories
  */
 export const extractSkills = (jdText) => {
     if (!jdText) jdText = "";
     const text = jdText.toLowerCase();
-    const extracted = {};
+
+    // Strict schema structure
+    const extracted = {
+        coreCS: [],
+        languages: [],
+        web: [],
+        data: [],
+        cloud: [],
+        testing: [],
+        other: []
+    };
+
     let totalSkills = 0;
 
     Object.entries(CATEGORIES).forEach(([category, keywords]) => {
         const foundTags = new Set();
         keywords.forEach(keyword => {
-            // Create a regex to match the keyword as whole words or specific tech names
-            // escape regex special characters just in case, though keeping it simple here
             const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             const regex = new RegExp(`\\b${escaped}\\b`, 'i');
 
             if (regex.test(text)) {
-                // format nicely (e.g., node.js -> Node.js, dsa -> DSA)
                 let formatted = keyword;
                 if (["dsa", "oop", "dbms", "os", "sql", "aws", "gcp", "ci/cd"].includes(keyword)) {
                     formatted = keyword.toUpperCase();
@@ -57,13 +65,22 @@ export const extractSkills = (jdText) => {
         });
 
         if (foundTags.size > 0) {
-            extracted[category] = Array.from(foundTags);
+            // Map the human-readable category to the rigid schema key
+            let schemaKey = "other";
+            if (category === "Core CS") schemaKey = "coreCS";
+            else if (category === "Languages") schemaKey = "languages";
+            else if (category === "Web") schemaKey = "web";
+            else if (category === "Data") schemaKey = "data";
+            else if (category === "Cloud/DevOps") schemaKey = "cloud";
+            else if (category === "Testing") schemaKey = "testing";
+
+            extracted[schemaKey] = Array.from(foundTags);
             totalSkills += foundTags.size;
         }
     });
 
     if (totalSkills === 0) {
-        return { "General": ["General fresher stack", "Aptitude", "Communication"] };
+        extracted.other = ["Communication", "Problem solving", "Basic coding", "Projects"];
     }
 
     return extracted;
@@ -116,7 +133,12 @@ export const generateCompanyIntel = (companyName) => {
 export const calculateReadiness = (extractedCategories, company, role, jdText) => {
     let score = 35; // base
 
-    const categoryCount = Object.keys(extractedCategories).filter(k => k !== "General").length;
+    // Count how many of the main strict categories actually have items (excluding 'other' for penalty reasoning or keeping it if we want points)
+    let categoryCount = 0;
+    Object.entries(extractedCategories).forEach(([key, arr]) => {
+        if (key !== 'other' && arr.length > 0) categoryCount++;
+    });
+
     score += Math.min(categoryCount * 5, 30); // +5 per category (max 30)
 
     if (company && company.trim().length > 0) score += 10;
@@ -130,11 +152,11 @@ export const calculateReadiness = (extractedCategories, company, role, jdText) =
  * Generates a template-based round checklist adapting to the skills and company size
  */
 export const generateChecklist = (extracted, companyIntel) => {
-    // Check what categories are present
-    const hasWeb = !!extracted["Web"];
-    const hasData = !!extracted["Data"];
-    const hasCloud = !!extracted["Cloud/DevOps"];
-    const hasDSA = !!extracted["Core CS"] && extracted["Core CS"].includes("DSA");
+    // Check what categories are present using the strict schema keys
+    const hasWeb = extracted.web.length > 0;
+    const hasData = extracted.data.length > 0;
+    const hasCloud = extracted.cloud.length > 0;
+    const hasDSA = extracted.coreCS.includes("DSA");
 
     const isEnterprise = companyIntel && companyIntel.size.includes("Enterprise");
 
@@ -215,8 +237,8 @@ export const generateChecklist = (extracted, companyIntel) => {
  * Generates a dynamic 7-day study plan
  */
 export const generatePlan = (extracted) => {
-    const hasWeb = !!extracted["Web"];
-    const hasData = !!extracted["Data"];
+    const hasWeb = extracted.web.length > 0;
+    const hasData = extracted.data.length > 0;
 
     return [
         { day: "Day 1", title: "Basics + Core CS", desc: "Revise OOPS, OS, DBMS fundamentals. Start with array and string DSA problems." },

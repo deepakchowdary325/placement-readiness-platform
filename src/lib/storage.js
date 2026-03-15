@@ -30,7 +30,23 @@ export const saveAnalysis = (analysisData) => {
 export const getHistory = () => {
     try {
         const raw = localStorage.getItem(HISTORY_KEY);
-        return raw ? JSON.parse(raw) : [];
+        if (!raw) return [];
+
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return [];
+
+        // Strict schema validation filter
+        const validEntries = parsed.filter(item => {
+            if (!item || typeof item !== 'object') return false;
+            // Legacy items might not have baseScore, allow readinessScore as fallback for backward comp if needed,
+            // but strict schema demands these core properties going forward:
+            const hasId = !!item.id;
+            const hasJdText = !!item.jdText;
+            const hasValidScore = item.baseScore !== undefined || item.readinessScore !== undefined;
+            return hasId && hasJdText && hasValidScore;
+        });
+
+        return validEntries;
     } catch (error) {
         console.error("Local storage error getting history:", error);
         return [];
