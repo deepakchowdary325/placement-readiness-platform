@@ -6,7 +6,9 @@ import {
   Practice,
   Assessments,
   Resources,
-  Profile
+  Profile,
+  History,
+  Results
 } from './pages/AppPages';
 
 function App() {
@@ -23,6 +25,8 @@ function App() {
           <Route path="/assessments" element={<Assessments />} />
           <Route path="/resources" element={<Resources />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/history" element={<History />} />
+          <Route path="/results/:id?" element={<Results />} />
         </Route>
 
         {/* Fallback */}

@@ -1,5 +1,8 @@
 import React from 'react';
 import { Dashboard as DashboardComponent } from './Dashboard';
+import { Assessments as AssessmentsComponent } from './Assessments';
+import { History as HistoryComponent } from './History';
+import { Results as ResultsComponent } from './Results';
 
 const PagePlaceholder = ({ title }) => (
     <div>
@@ -11,7 +14,10 @@ const PagePlaceholder = ({ title }) => (
 );
 
 export const Dashboard = () => <DashboardComponent />;
+export const Assessments = () => <AssessmentsComponent />;
+export const History = () => <HistoryComponent />;
+export const Results = () => <ResultsComponent />;
+
 export const Practice = () => <PagePlaceholder title="Practice" />;
-export const Assessments = () => <PagePlaceholder title="Assessments" />;
 export const Resources = () => <PagePlaceholder title="Resources" />;
 export const Profile = () => <PagePlaceholder title="Profile" />;
