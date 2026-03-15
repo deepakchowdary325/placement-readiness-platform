@@ -1,41 +1,143 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
-import { getAnalysisById, getHistory } from '../lib/storage';
-import { CheckCircle2, CalendarDays, BrainCircuit, MessageSquare, ArrowLeft } from 'lucide-react';
+import { getAnalysisById, getHistory, updateAnalysis } from '../lib/storage';
+import { CheckCircle2, CalendarDays, BrainCircuit, MessageSquare, ArrowLeft, Copy, Download, ArrowRightCircle } from 'lucide-react';
+import { cn } from '../lib/utils'; // Make sure utils are accessible for class merging
 
 export const Results = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     const [data, setData] = useState(null);
+    const [skillConfidence, setSkillConfidence] = useState({});
+    const [currentScore, setCurrentScore] = useState(0);
 
     useEffect(() => {
+        let entry;
         if (id) {
-            const entry = getAnalysisById(id);
-            if (entry) {
-                setData(entry);
-            } else {
-                navigate('/history');
-            }
+            entry = getAnalysisById(id);
+            if (!entry) navigate('/history');
         } else {
-            // Load latest if no ID
             const history = getHistory();
             if (history.length > 0) {
-                setData(history[0]);
+                entry = history[0];
             } else {
                 navigate('/assessments');
             }
         }
+
+        if (entry) {
+            setData(entry);
+
+            // Initialize local states
+            // Start with base calculated score if readinessScore not present as current
+            setCurrentScore(entry.readinessScore || 0);
+
+            // Reconstruct confidence map: prioritize stored map, fallback to everything = "practice"
+            const storedMap = entry.skillConfidenceMap || {};
+            const initialMap = {};
+
+            Object.values(entry.extractedSkills || {}).forEach(skillArray => {
+                skillArray.forEach(skill => {
+                    initialMap[skill] = storedMap[skill] || 'practice';
+                });
+            });
+
+            setSkillConfidence(initialMap);
+        }
     }, [id, navigate]);
+
+    // Handle copying text to clipboard
+    const handleCopy = (text, label) => {
+        navigator.clipboard.writeText(text);
+        alert(`Copied ${label} to clipboard!`);
+    };
+
+    // Handle downloading full analysis as a single TXT file
+    const handleDownloadTxt = () => {
+        if (!data) return;
+
+        const { company, role, checklist, plan, questions } = data;
+        let content = `Placement Readiness Analysis\n`;
+        content += `============================\n`;
+        content += `Role: ${role || "Unknown Role"}\n`;
+        content += `Company: ${company || "Unknown Company"}\n`;
+        content += `Readiness Score: ${currentScore}/100\n\n`;
+
+        content += `YOUR PROGRESS ON CATEGORIES:\n`;
+        Object.entries(skillConfidence).forEach(([skill, status]) => {
+            content += `- ${skill}: ${status === 'know' ? 'I know this' : 'Need practice'}\n`;
+        });
+        content += `\n`;
+
+        content += `ROUND-WISE PREPARATION CHECKLIST:\n`;
+        checklist.forEach(round => {
+            content += `\n[${round.title}]\n`;
+            round.items.forEach(item => content += `  - ${item}\n`);
+        });
+        content += `\n`;
+
+        content += `7-DAY STUDY PLAN:\n`;
+        plan.forEach(p => {
+            content += `\n[${p.day}: ${p.title}]\n  ${p.desc}\n`;
+        });
+        content += `\n`;
+
+        content += `10 LIKELY INTERVIEW QUESTIONS:\n\n`;
+        questions.forEach((q, i) => {
+            content += `${i + 1}. ${q}\n`;
+        });
+
+        const blob = new Blob([content], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `Prep_Analysis_${(company || "Company").replace(/\s+/g, '_')}.txt`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
+
+    // Handle toggling skill confidence globally
+    const toggleSkillConfidence = (skill) => {
+        const currentStatus = skillConfidence[skill];
+        const newStatus = currentStatus === 'know' ? 'practice' : 'know';
+
+        const newConfidenceMap = {
+            ...skillConfidence,
+            [skill]: newStatus
+        };
+
+        // Calculate new score differential
+        // +2 for moving practice->know, -2 for moving know->practice
+        let scoreDiff = newStatus === 'know' ? 2 : -2;
+        let newScore = Math.min(Math.max(currentScore + scoreDiff, 0), 100);
+
+        setSkillConfidence(newConfidenceMap);
+        setCurrentScore(newScore);
+
+        // Save back to localStorage immediately
+        if (data && data.id) {
+            updateAnalysis(data.id, {
+                skillConfidenceMap: newConfidenceMap,
+                readinessScore: newScore
+            });
+        }
+    };
 
     if (!data) return null; // loading or redirecting
 
-    const { company, role, extractedSkills, generateChecklist, plan, questions, readinessScore } = data;
-    // Fix: Using the stored plan and questions from payload instead of re-generating to ensure 100% permanence 
-    // Wait, the payload uses names: `checklist`, `plan`, `questions`. 
+    const { company, role, extractedSkills } = data;
     const checklist = data.checklist || [];
     const planItems = data.plan || [];
     const savedQuestions = data.questions || [];
+
+    // Derive top 3 weak skills for the "Action Next" box
+    const weakSkills = Object.entries(skillConfidence)
+        .filter(([_, status]) => status === 'practice')
+        .map(([skill]) => skill)
+        .slice(0, 3);
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500 max-w-6xl mx-auto pb-12">
@@ -56,9 +158,19 @@ export const Results = () => {
                 </div>
 
                 <div className="flex items-center space-x-4">
-                    <div className="text-right">
+                    <button
+                        onClick={handleDownloadTxt}
+                        className="flex items-center px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm"
+                    >
+                        <Download className="w-4 h-4 mr-2" />
+                        Download as TXT
+                    </button>
+
+                    <div className="text-right ml-4">
                         <p className="text-sm font-medium text-slate-500 uppercase tracking-wider">Readiness Score</p>
-                        <p className="text-4xl font-extrabold text-indigo-600">{readinessScore}<span className="text-2xl text-slate-300">/100</span></p>
+                        <p className="text-4xl font-extrabold text-indigo-600 transition-all duration-300">
+                            {currentScore}<span className="text-2xl text-slate-300">/100</span>
+                        </p>
                     </div>
                 </div>
             </div>
@@ -71,9 +183,14 @@ export const Results = () => {
                     {/* Skills Extracted */}
                     <Card>
                         <CardHeader>
-                            <CardTitle className="flex items-center text-xl">
-                                <BrainCircuit className="w-6 h-6 mr-2 text-indigo-500" />
-                                Key Skills Detected
+                            <CardTitle className="flex items-center text-xl justify-between">
+                                <div className="flex items-center">
+                                    <BrainCircuit className="w-6 h-6 mr-2 text-indigo-500" />
+                                    Key Skills Detected
+                                </div>
+                                <span className="text-xs font-normal text-slate-400 bg-slate-100 px-2 py-1 rounded-full">
+                                    Click to toggle status
+                                </span>
                             </CardTitle>
                         </CardHeader>
                         <CardContent>
@@ -81,12 +198,36 @@ export const Results = () => {
                                 {Object.entries(extractedSkills).map(([category, skills]) => (
                                     <div key={category} className="space-y-3">
                                         <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100 pb-1">{category}</h4>
-                                        <div className="flex flex-wrap gap-2">
-                                            {skills.map(skill => (
-                                                <span key={skill} className="px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full text-sm font-medium">
-                                                    {skill}
-                                                </span>
-                                            ))}
+                                        <div className="flex flex-col gap-2">
+                                            {skills.map(skill => {
+                                                const isKnown = skillConfidence[skill] === 'know';
+
+                                                return (
+                                                    <div
+                                                        key={skill}
+                                                        onClick={() => toggleSkillConfidence(skill)}
+                                                        className={cn(
+                                                            "group flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-all border",
+                                                            isKnown
+                                                                ? "bg-green-50 border-green-200 hover:bg-green-100"
+                                                                : "bg-orange-50 border-orange-200 hover:bg-orange-100"
+                                                        )}
+                                                    >
+                                                        <span className={cn(
+                                                            "text-sm font-medium",
+                                                            isKnown ? "text-green-800" : "text-orange-800"
+                                                        )}>
+                                                            {skill}
+                                                        </span>
+                                                        <span className={cn(
+                                                            "text-xs font-bold px-2 py-0.5 rounded-full",
+                                                            isKnown ? "bg-green-200 text-green-800" : "bg-orange-200 text-orange-800"
+                                                        )}>
+                                                            {isKnown ? "I know this" : "Need practice"}
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 ))}
@@ -97,9 +238,21 @@ export const Results = () => {
                     {/* Interview Rounds Checklist */}
                     <Card>
                         <CardHeader>
-                            <CardTitle className="flex items-center text-xl">
-                                <CheckCircle2 className="w-6 h-6 mr-2 text-green-500" />
-                                Round-wise Preparation Checklist
+                            <CardTitle className="flex items-center justify-between text-xl">
+                                <div className="flex items-center">
+                                    <CheckCircle2 className="w-6 h-6 mr-2 text-green-500" />
+                                    Round-wise Preparation Checklist
+                                </div>
+                                <button
+                                    onClick={() => handleCopy(
+                                        checklist.map(r => `[${r.title}]\n` + r.items.map(i => `- ${i}`).join('\n')).join('\n\n'),
+                                        "Round Checklist"
+                                    )}
+                                    className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                    title="Copy checklist"
+                                >
+                                    <Copy className="w-4 h-4" />
+                                </button>
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-6">
@@ -125,11 +278,23 @@ export const Results = () => {
                 <div className="space-y-8">
 
                     {/* 7-Day Plan */}
-                    <Card className="bg-gradient-to-br from-slate-900 to-slate-800 text-white border-0 shadow-xl">
+                    <Card className="bg-gradient-to-br from-slate-900 to-slate-800 text-white border-0 shadow-xl relative overflow-hidden">
                         <CardHeader>
-                            <CardTitle className="flex items-center text-xl text-white">
-                                <CalendarDays className="w-6 h-6 mr-2 text-indigo-400" />
-                                7-Day Action Plan
+                            <CardTitle className="flex items-center justify-between text-xl text-white">
+                                <div className="flex items-center">
+                                    <CalendarDays className="w-6 h-6 mr-2 text-indigo-400" />
+                                    7-Day Action Plan
+                                </div>
+                                <button
+                                    onClick={() => handleCopy(
+                                        planItems.map(p => `[${p.day}: ${p.title}]\n- ${p.desc}`).join('\n\n'),
+                                        "7-Day Plan"
+                                    )}
+                                    className="p-2 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-lg transition-colors z-10"
+                                    title="Copy plan"
+                                >
+                                    <Copy className="w-4 h-4" />
+                                </button>
                             </CardTitle>
                         </CardHeader>
                         <CardContent>
@@ -148,9 +313,21 @@ export const Results = () => {
                     {/* Interview Questions */}
                     <Card>
                         <CardHeader>
-                            <CardTitle className="flex items-center text-xl">
-                                <MessageSquare className="w-6 h-6 mr-2 text-rose-500" />
-                                Likely Interview Questions
+                            <CardTitle className="flex items-center justify-between text-xl">
+                                <div className="flex items-center">
+                                    <MessageSquare className="w-6 h-6 mr-2 text-rose-500" />
+                                    Likely Interview Questions
+                                </div>
+                                <button
+                                    onClick={() => handleCopy(
+                                        savedQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n'),
+                                        "10 Questions"
+                                    )}
+                                    className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                                    title="Copy questions"
+                                >
+                                    <Copy className="w-4 h-4" />
+                                </button>
                             </CardTitle>
                         </CardHeader>
                         <CardContent>
@@ -167,6 +344,33 @@ export const Results = () => {
 
                 </div>
             </div>
+
+            {/* Action Next Box */}
+            <div className="mt-8">
+                <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-8 flex flex-col md:flex-row items-center justify-between">
+                    <div>
+                        <h3 className="text-xl font-bold text-indigo-900 mb-2">Ready to take Action Next?</h3>
+                        {weakSkills.length > 0 ? (
+                            <p className="text-indigo-700">
+                                You currently need practice on: <span className="font-bold">{weakSkills.join(', ')}</span>.
+                            </p>
+                        ) : (
+                            <p className="text-indigo-700">
+                                You're perfectly prepared for everything detected! Great job.
+                            </p>
+                        )}
+                    </div>
+
+                    <button
+                        onClick={() => alert("Action triggered: In a full app, this might navigate to Day 1 Practice Mode.")}
+                        className="mt-6 md:mt-0 flex items-center px-6 py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-[0_4px_14px_0_rgba(79,70,229,0.39)] hover:bg-indigo-500 hover:shadow-[0_6px_20px_rgba(79,70,229,0.23)] transition-all"
+                    >
+                        Start Day 1 plan now
+                        <ArrowRightCircle className="ml-2 w-5 h-5" />
+                    </button>
+                </div>
+            </div>
+
         </div>
     );
 };

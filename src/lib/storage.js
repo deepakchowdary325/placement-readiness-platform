@@ -41,3 +41,19 @@ export const getAnalysisById = (id) => {
     const history = getHistory();
     return history.find(entry => entry.id === id) || null;
 };
+
+export const updateAnalysis = (id, updates) => {
+    try {
+        const history = getHistory();
+        const index = history.findIndex(entry => entry.id === id);
+        if (index !== -1) {
+            history[index] = { ...history[index], ...updates };
+            localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+            return history[index];
+        }
+        return null;
+    } catch (error) {
+        console.error("Local storage error updating analysis:", error);
+        return null;
+    }
+};
