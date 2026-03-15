@@ -1,6 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import DashboardLayout from './layouts/DashboardLayout';
+import { TestChecklist } from './pages/TestChecklist';
+import { ShipPlatform } from './pages/ShipPlatform';
 import {
   Dashboard,
   Practice,
@@ -28,6 +30,10 @@ function App() {
           <Route path="/history" element={<History />} />
           <Route path="/results/:id?" element={<Results />} />
         </Route>
+
+        {/* Developer / QA Routes */}
+        <Route path="/prp/07-test" element={<TestChecklist />} />
+        <Route path="/prp/08-ship" element={<ShipPlatform />} />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
