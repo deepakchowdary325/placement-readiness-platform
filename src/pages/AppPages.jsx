@@ -1,4 +1,5 @@
 import React from 'react';
+import { Dashboard as DashboardComponent } from './Dashboard';
 
 const PagePlaceholder = ({ title }) => (
     <div>
@@ -9,7 +10,7 @@ const PagePlaceholder = ({ title }) => (
     </div>
 );
 
-export const Dashboard = () => <PagePlaceholder title="Dashboard" />;
+export const Dashboard = () => <DashboardComponent />;
 export const Practice = () => <PagePlaceholder title="Practice" />;
 export const Assessments = () => <PagePlaceholder title="Assessments" />;
 export const Resources = () => <PagePlaceholder title="Resources" />;
