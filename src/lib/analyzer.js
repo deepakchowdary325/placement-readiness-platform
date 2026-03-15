@@ -69,6 +69,47 @@ export const extractSkills = (jdText) => {
     return extracted;
 };
 
+// Known large companies map
+const ENTERPRISE_COMPANIES = [
+    "amazon", "google", "meta", "facebook", "apple", "netflix", "microsoft",
+    "tcs", "infosys", "wipro", "hcl", "cognizant", "accenture", "ibm", "oracle", "sap",
+    "deloitte", "pwc", "kpmg", "ey", "capgemini", "tech mahindra"
+];
+
+/**
+ * Heuristically determines company intel based on company name
+ */
+export const generateCompanyIntel = (companyName) => {
+    if (!companyName || companyName.trim() === "") return null;
+
+    const normalized = companyName.toLowerCase().trim();
+    let isEnterprise = false;
+
+    // Check if the input contains any of the known enterprise keywords
+    for (const ent of ENTERPRISE_COMPANIES) {
+        if (normalized.includes(ent)) {
+            isEnterprise = true;
+            break;
+        }
+    }
+
+    if (isEnterprise) {
+        return {
+            name: companyName,
+            industry: "Technology Services & Consulting",
+            size: "Enterprise (2000+)",
+            focus: "Structured DSA + core fundamentals"
+        };
+    } else {
+        return {
+            name: companyName,
+            industry: "Technology Services / Product",
+            size: "Startup (<200) / Mid-size",
+            focus: "Practical problem solving + stack depth"
+        };
+    }
+};
+
 /**
  * Returns a score between 0 and 100 based on the inputs
  */
@@ -86,59 +127,88 @@ export const calculateReadiness = (extractedCategories, company, role, jdText) =
 };
 
 /**
- * Generates a template-based 4-round checklist adapting to the skills
+ * Generates a template-based round checklist adapting to the skills and company size
  */
-export const generateChecklist = (extracted) => {
+export const generateChecklist = (extracted, companyIntel) => {
     // Check what categories are present
     const hasWeb = !!extracted["Web"];
     const hasData = !!extracted["Data"];
     const hasCloud = !!extracted["Cloud/DevOps"];
+    const hasDSA = !!extracted["Core CS"] && extracted["Core CS"].includes("DSA");
 
-    const rounds = [
-        {
-            title: "Round 1: Aptitude / Basics",
-            items: [
-                "Review Quantitative Aptitude formulas",
-                "Practice Logical Reasoning puzzles",
-                "Brush up Data Interpretation skills",
-                "Test Verbal Ability and Reading Comprehension",
-                "Take 2 full-length timed aptitude mock tests"
-            ]
-        },
-        {
-            title: "Round 2: DSA + Core CS",
-            items: [
-                "Revise basic data structures (Arrays, Strings, Linked Lists)",
-                "Practice standard algorithmic patterns (Sliding Window, Two Pointers)",
-                "Review Object-Oriented Programming (OOP) core pillars",
-                "Brush up on DBMS concepts (Normal forms, basic queries)",
-                "Review Operating System fundamentals (Threads, Processes, Deadlocks)"
-            ]
-        },
-        {
-            title: "Round 3: Tech Interview (Projects + Stack)",
-            items: [
-                "Prepare a 2-minute project introduction",
-                "Identify 3 major challenges faced during projects and the solutions",
-                hasWeb ? "Review frontend/backend framework lifecycle and state management" : "Review chosen programming language nuances and memory management",
-                hasData ? "Practice complex SQL joins and NoSQL document design" : "Practice writing clean, modular code on a whiteboard",
-                "Deep dive into the specific technologies mentioned in the JD",
-                hasCloud ? "Review basic cloud deployment, containerization, and CI/CD concepts" : "Review API design and RESTful principles"
-            ]
-        },
-        {
-            title: "Round 4: Managerial / HR",
-            items: [
-                "Prepare 'Tell me about yourself' pitch",
-                "Formulate answers for behavioral questions (STAR method)",
-                "Research the company's recent news, culture, and products",
-                "Prepare 'Why do you want to join us?' and 'Why this role?'",
-                "Draft 3 thoughtful questions to ask the interviewer"
-            ]
-        }
-    ];
+    const isEnterprise = companyIntel && companyIntel.size.includes("Enterprise");
 
-    return rounds;
+    if (isEnterprise) {
+        return [
+            {
+                title: "Round 1: Online Assessment",
+                why: "Enterprise companies strictly filter via automated coding rounds.",
+                items: [
+                    "Practice solving 2 Medium DSA problems in 45 mins",
+                    "Take 2 full-length timed aptitude mock tests",
+                    "Review quantitative and logical reasoning patterns"
+                ]
+            },
+            {
+                title: "Round 2: Technical Interview (DSA focus)",
+                why: "They prioritize algorithm optimization and standard patterns over specific framework knowledge.",
+                items: [
+                    "Practice explaining code complexity (Time and Space)",
+                    "Master sliding window, two-pointer, and tree traversal algorithms",
+                    "Brush up on string manipulation and array operations on a whiteboard"
+                ]
+            },
+            {
+                title: "Round 3: Core CS + System Design",
+                why: "Testing foundational computer science knowledge required for massive scale.",
+                items: [
+                    "Review Object-Oriented Programming (OOP) core pillars",
+                    "Brush up on DBMS concepts (Normal forms, basic queries)",
+                    "Review Operating System fundamentals (Threads, Processes, Deadlocks)"
+                ]
+            },
+            {
+                title: "Round 4: HR / Managerial",
+                why: "Ensuring you fit within massive team structures and global policies.",
+                items: [
+                    "Prepare behavioral STAR responses for conflict resolution",
+                    "Research the company's global leadership principles",
+                    "Draft answers for 'Why do you want to join a large enterprise like ours?'"
+                ]
+            }
+        ];
+    } else {
+        // Startup / Mid-size or default flow
+        return [
+            {
+                title: "Round 1: Practical Coding Task",
+                why: "Startups need you to build things immediately, favoring practical stack knowledge over theoretical algorithms.",
+                items: [
+                    hasWeb ? "Build a small full-stack component (e.g., Todo app) under time pressure" : "Solve applied logic problems prioritizing clean code",
+                    hasData ? "Practice writing complex SQL joins and API integrations" : "Practice modularizing functions for readability",
+                    "Ensure your GitHub projects are actively running and documented"
+                ]
+            },
+            {
+                title: "Round 2: Architecture & System Discussion",
+                why: "You'll likely own features end-to-end, requiring broader system awareness.",
+                items: [
+                    "Prepare a 2-minute pitch explaining your best project's architecture",
+                    hasCloud ? "Review Docker containerization and CI/CD pipelines" : "Review general system deployment constraints",
+                    "Discuss trade-offs you made in past technical decisions"
+                ]
+            },
+            {
+                title: "Round 3: Founder / Culture Fit",
+                why: "In small teams, culture alignment and agility are paramount.",
+                items: [
+                    "Research the specific product the startup is building",
+                    "Prepare for open-ended questions about handling ambiguity",
+                    "Draft 3 thoughtful questions about the startup's runway, roadmap, or market fit"
+                ]
+            }
+        ];
+    }
 };
 
 /**

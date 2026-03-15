@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../components/ui/card';
-import { extractSkills, generateChecklist, generatePlan, generateQuestions, calculateReadiness } from '../lib/analyzer';
+import { extractSkills, generateChecklist, generatePlan, generateQuestions, calculateReadiness, generateCompanyIntel } from '../lib/analyzer';
 import { saveAnalysis } from '../lib/storage';
 import { Wand2, History as HistoryIcon, FileText } from 'lucide-react';
 
@@ -22,7 +22,8 @@ export const Assessments = () => {
         setTimeout(() => {
             const extractedSkills = extractSkills(jdText);
             const readinessScore = calculateReadiness(extractedSkills, company, role, jdText);
-            const checklist = generateChecklist(extractedSkills);
+            const companyIntel = generateCompanyIntel(company);
+            const checklist = generateChecklist(extractedSkills, companyIntel);
             const plan = generatePlan(extractedSkills);
             const questions = generateQuestions(extractedSkills);
 
@@ -34,7 +35,8 @@ export const Assessments = () => {
                 checklist,
                 plan,
                 questions,
-                readinessScore
+                readinessScore,
+                companyIntel
             };
 
             const savedEntry = saveAnalysis(payload);
@@ -110,8 +112,8 @@ export const Assessments = () => {
                             type="submit"
                             disabled={!jdText.trim() || isAnalyzing}
                             className={`w-full py-4 rounded-xl font-bold text-white shadow-lg flex items-center justify-center transition-all ${!jdText.trim() || isAnalyzing
-                                    ? 'bg-indigo-300 cursor-not-allowed'
-                                    : 'bg-indigo-600 hover:bg-indigo-700 hover:-translate-y-0.5'
+                                ? 'bg-indigo-300 cursor-not-allowed'
+                                : 'bg-indigo-600 hover:bg-indigo-700 hover:-translate-y-0.5'
                                 }`}
                         >
                             {isAnalyzing ? (

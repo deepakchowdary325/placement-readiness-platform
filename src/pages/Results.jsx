@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import { getAnalysisById, getHistory, updateAnalysis } from '../lib/storage';
-import { CheckCircle2, CalendarDays, BrainCircuit, MessageSquare, ArrowLeft, Copy, Download, ArrowRightCircle } from 'lucide-react';
+import { CheckCircle2, CalendarDays, BrainCircuit, MessageSquare, ArrowLeft, Copy, Download, ArrowRightCircle, Building } from 'lucide-react';
 import { cn } from '../lib/utils'; // Make sure utils are accessible for class merging
 
 export const Results = () => {
@@ -128,7 +128,7 @@ export const Results = () => {
 
     if (!data) return null; // loading or redirecting
 
-    const { company, role, extractedSkills } = data;
+    const { company, role, extractedSkills, companyIntel } = data;
     const checklist = data.checklist || [];
     const planItems = data.plan || [];
     const savedQuestions = data.questions || [];
@@ -235,17 +235,54 @@ export const Results = () => {
                         </CardContent>
                     </Card>
 
-                    {/* Interview Rounds Checklist */}
+                    {/* Company Intel (if available) */}
+                    {companyIntel && (
+                        <Card className="bg-slate-900 text-white border-0 shadow-lg">
+                            <CardHeader className="pb-4 border-b border-slate-700">
+                                <CardTitle className="flex items-center text-xl justify-between">
+                                    <div className="flex items-center">
+                                        <Building className="w-6 h-6 mr-2 text-indigo-400" />
+                                        Company Intel
+                                    </div>
+                                    <span className="text-xs bg-slate-800 text-slate-400 px-2 py-1 rounded-md border border-slate-700">
+                                        Demo Mode: Generated heuristically
+                                    </span>
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="pt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <p className="text-sm text-slate-400 uppercase tracking-wider mb-1">Target Company</p>
+                                    <p className="text-lg font-bold">{companyIntel.name}</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm text-slate-400 uppercase tracking-wider mb-1">Industry</p>
+                                    <p className="text-lg font-bold text-indigo-200">{companyIntel.industry}</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm text-slate-400 uppercase tracking-wider mb-1">Size Category</p>
+                                    <div className="inline-block bg-indigo-500/20 text-indigo-300 font-semibold px-3 py-1 rounded-full text-sm border border-indigo-500/30">
+                                        {companyIntel.size}
+                                    </div>
+                                </div>
+                                <div>
+                                    <p className="text-sm text-slate-400 uppercase tracking-wider mb-1">Typical Hiring Focus</p>
+                                    <p className="text-sm font-medium text-slate-300 leading-snug">{companyIntel.focus}</p>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {/* Interview Rounds Checklist (Timeline) */}
                     <Card>
                         <CardHeader>
                             <CardTitle className="flex items-center justify-between text-xl">
                                 <div className="flex items-center">
                                     <CheckCircle2 className="w-6 h-6 mr-2 text-green-500" />
-                                    Round-wise Preparation Checklist
+                                    Dynamic Round Mapping
                                 </div>
                                 <button
                                     onClick={() => handleCopy(
-                                        checklist.map(r => `[${r.title}]\n` + r.items.map(i => `- ${i}`).join('\n')).join('\n\n'),
+                                        checklist.map(r => `[${r.title}]\nWhy: ${r.why}\n` + r.items.map(i => `- ${i}`).join('\n')).join('\n\n'),
                                         "Round Checklist"
                                     )}
                                     className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
@@ -255,20 +292,36 @@ export const Results = () => {
                                 </button>
                             </CardTitle>
                         </CardHeader>
-                        <CardContent className="space-y-6">
-                            {checklist.map((round, idx) => (
-                                <div key={idx} className="bg-slate-50 rounded-xl p-5 border border-slate-100">
-                                    <h3 className="font-bold text-slate-800 mb-3">{round.title}</h3>
-                                    <ul className="space-y-2">
-                                        {round.items.map((item, i) => (
-                                            <li key={i} className="flex items-start">
-                                                <span className="text-green-500 mr-2 mt-0.5">•</span>
-                                                <span className="text-slate-600 text-sm leading-relaxed">{item}</span>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            ))}
+                        <CardContent>
+                            <div className="relative border-l-2 border-slate-100 ml-4 space-y-8 pb-4 mt-4">
+                                {checklist.map((round, idx) => (
+                                    <div key={idx} className="relative pl-8">
+                                        {/* Timeline Dot */}
+                                        <div className="absolute -left-[11px] top-1 w-5 h-5 rounded-full bg-white border-4 border-indigo-500 shadow-sm" />
+
+                                        <div className="bg-slate-50 rounded-xl p-5 border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+                                            <h3 className="font-bold text-lg text-slate-800">{round.title}</h3>
+
+                                            {/* Why this matters callout */}
+                                            {round.why && (
+                                                <div className="mt-2 mb-4 bg-indigo-50/50 text-indigo-800 text-sm px-4 py-2 rounded-lg border border-indigo-100 italic">
+                                                    <span className="font-semibold not-italic mr-1">Why this round?</span>
+                                                    {round.why}
+                                                </div>
+                                            )}
+
+                                            <ul className="space-y-2 mt-3">
+                                                {round.items.map((item, i) => (
+                                                    <li key={i} className="flex items-start">
+                                                        <span className="text-green-500 mr-2 mt-0.5">•</span>
+                                                        <span className="text-slate-600 text-sm leading-relaxed">{item}</span>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                         </CardContent>
                     </Card>
 
